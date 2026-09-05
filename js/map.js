@@ -1,8 +1,4 @@
-// Waya — mapa
-//
-// Usa o estilo "liberty" da OpenFreeMap (livre, sem chave) com um filtro
-// duotone aplicado por cima para dar uma identidade visual própria de mapa
-// de transporte, em vez do aspecto genérico de mapa turístico.
+
 
 const { MAP_STYLE, MAP_CENTER, MAP_ZOOM } = window.WAYA_CONFIG;
 
