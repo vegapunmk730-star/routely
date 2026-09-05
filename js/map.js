@@ -11,6 +11,9 @@ const PALETTE = {
 };
 
 function createMap(container, handlers) {
+   if (typeof maplibregl === 'undefined') {
+    throw new Error('MapLibre GL não está carregado. Verifica o CDN.');
+  }
   const map = new maplibregl.Map({
     container,
     style: MAP_STYLE,
