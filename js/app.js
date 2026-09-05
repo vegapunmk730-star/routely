@@ -32,56 +32,65 @@ const COLLAB_TYPE_LABELS = {
 document.addEventListener('DOMContentLoaded', boot);
 
 async function boot() {
-  wireStaticIcons();
-  wireNav();
-  wireFab();
-  wireSheets();
-  wireForms();
-  setupOfflineIndicator();
-
+  console.log('[WAYA] Boot iniciado');
   try {
-    state.collaborator = await window.waya_getOrCreateCollaborator();
-  } catch (err) {
-    state.collaborator = null;
-  }
-  updateProfileChip();
+    wireStaticIcons();
+    wireNav();
+    wireFab();
+    wireSheets();
+    wireForms();
+    setupOfflineIndicator();
 
-  const cityName = localStorage.getItem('waya_current_city') || window.WAYA_CONFIG.DEFAULT_CITY;
-  await loadCity(cityName);
-
-  consumeLaunchAction();
-  document.getElementById('loadingVeil').classList.add('hidden');
-}
-
-// Trata o lançamento a partir dos atalhos do ícone da app (long-press no
-// Android): "Adicionar paragem" e "Encontrar rota" abrem já no modo certo.
-function consumeLaunchAction() {
-  const params = new URLSearchParams(location.search);
-  const action = params.get('action');
-  if (!action) return;
-  history.replaceState({}, '', location.pathname);
-
-  if (action === 'add-stop') {
-    switchScreen('screenMap');
-    setMode('addStop');
-  } else if (action === 'find-route') {
-    if (state.stops.length >= 2) {
-      switchScreen('screenMap');
-      setMode('route');
-    } else {
-      showToast('Adiciona pelo menos duas paragens primeiro.');
+    // Diagnóstico imediato no console (F12 → Console)
+    if (typeof maplibregl === 'undefined') {
+      console.error('[WAYA] ERRO: maplibregl não carregou. Verifica CDN ou bloqueadores.');
     }
+    if (typeof supabase === 'undefined') {
+      console.error('[WAYA] ERRO: supabase não carregou. Verifica CDN ou bloqueadores.');
+    }
+    if (!window.wayaData) {
+      console.error('[WAYA] ERRO: data.js não está disponível (wayaData undefined).');
+    }
+    if (!window.wayaMap) {
+      console.error('[WAYA] ERRO: map.js não está disponível (wayaMap undefined).');
+    }
+
+    try {
+      if (window.waya_getOrCreateCollaborator) {
+        state.collaborator = await window.waya_getOrCreateCollaborator();
+      } else {
+        console.warn('[WAYA] waya_getOrCreateCollaborator não encontrado');
+      }
+    } catch (err) {
+      console.warn('[WAYA] Colaborador offline:', err.message);
+      state.collaborator = null;
+    }
+    updateProfileChip();
+
+    const cityName = localStorage.getItem('waya_current_city') || window.WAYA_CONFIG.DEFAULT_CITY;
+    await loadCity(cityName);
+
+    consumeLaunchAction();
+  } catch (err) {
+    console.error('[WAYA] Erro fatal no arranque:', err);
+    showToast('Erro ao iniciar: ' + (err?.message || 'desconhecido'));
+  } finally {
+    // GARANTE que o splash desaparece mesmo em caso de erro grave
+    console.log('[WAYA] Boot terminado — a esconder splash');
+    const veil = document.getElementById('loadingVeil');
+    if (veil) veil.classList.add('hidden');
   }
 }
-
-// ------------------------------------------------------------------ cidade
 
 async function loadCity(name) {
+  console.log('[WAYA] loadCity:', name);
   let city;
   try {
+    if (!window.wayaData?.getOrCreateCity) throw new Error('Dados indisponíveis');
     city = await wayaData.getOrCreateCity(name);
     localStorage.setItem('waya_current_city_meta', JSON.stringify(city));
   } catch (err) {
+    console.warn('[WAYA] getOrCreateCity falhou:', err.message);
     const cached = localStorage.getItem('waya_current_city_meta');
     city = cached ? JSON.parse(cached) : null;
     if (!city) {
@@ -97,32 +106,60 @@ async function loadCity(name) {
 
   let dataset;
   try {
-    dataset = await wayaData.fetchCityDataset(city.id);
+    if (window.wayaData?.fetchCityDataset) {
+      dataset = await wayaData.fetchCityDataset(city.id);
+    } else {
+      throw new Error('fetchCityDataset indisponível');
+    }
   } catch (err) {
-    dataset = wayaData.loadCachedDataset(city.id) || { stops: [], connections: [], activity: [], collaborators: [], verifications: [] };
-    showToast('Sem ligação — a mostrar dados guardados neste dispositivo.');
+    console.warn('[WAYA] fetchCityDataset falhou:', err.message);
+    try {
+      dataset = window.wayaData?.loadCachedDataset ? wayaData.loadCachedDataset(city.id) : null;
+    } catch (e2) {
+      dataset = null;
+    }
+    if (!dataset) {
+      dataset = { stops: [], connections: [], activity: [], collaborators: [], verifications: [] };
+      showToast('Sem ligação — a mostrar dados guardados neste dispositivo.');
+    }
   }
   applyDataset(dataset);
 
-  if (!state.map) {
-    state.map = wayaMap.createMap('map', {
-      onLoad: () => renderMap(),
-      onMapClick: (lngLat) => { if (state.mode === 'addStop') openStopForm(null, lngLat); },
-      onStopClick: handleStopClickOnMap
-    });
-  } else if (state.map.isStyleLoaded()) {
-    renderMap();
-    fitToStops();
+  // Criação do mapa com protecção total
+  if (typeof maplibregl !== 'undefined' && window.wayaMap) {
+    try {
+      if (!state.map) {
+        state.map = wayaMap.createMap('map', {
+          onLoad: () => renderMap(),
+          onMapClick: (lngLat) => { if (state.mode === 'addStop') openStopForm(null, lngLat); },
+          onStopClick: handleStopClickOnMap
+        });
+      } else if (state.map.isStyleLoaded && state.map.isStyleLoaded()) {
+        renderMap();
+        fitToStops();
+      } else if (state.map.once) {
+        state.map.once('load', () => { renderMap(); fitToStops(); });
+      }
+    } catch (mapErr) {
+      console.error('[WAYA] Erro no mapa:', mapErr);
+      showToast('Erro ao carregar o mapa.');
+    }
   } else {
-    state.map.once('load', () => { renderMap(); fitToStops(); });
+    console.warn('[WAYA] MapLibre indisponível — mapa omitido');
+    showToast('Biblioteca do mapa não carregou.');
   }
 
   if (state.unsubscribeRealtime) state.unsubscribeRealtime();
-  if (navigator.onLine) {
-    state.unsubscribeRealtime = wayaData.subscribeToCity(city.id, debounce(refreshFromServer, 700));
+  if (navigator.onLine && window.wayaData?.subscribeToCity) {
+    try {
+      state.unsubscribeRealtime = wayaData.subscribeToCity(city.id, debounce(refreshFromServer, 700));
+    } catch (err) {
+      console.warn('[WAYA] Realtime indisponível:', err.message);
+    }
   }
 
   renderAllLists();
+  console.log('[WAYA] loadCity concluído');
 }
 
 async function refreshFromServer() {
