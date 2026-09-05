@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#13213C">
+<title>Waya — Mapa do Transporte Informal</title>
+<meta name="description" content="Mapa colaborativo de paragens e rotas de transporte informal, construído pela comunidade.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="icon" href="icons/icon-192.png" sizes="192x192" type="image/png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<div class="loading-veil" id="loadingVeil">
+  <div class="loading-mark">WAYA</div>
+  <div class="loading-sub">A carregar o mapa da cidade…</div>
+</div>
+
+<div id="app">
+
+  <div class="offline-strip" id="offlineStrip">
+    <span class="icon" id="offlineIcon"></span>
+    <span>Sem ligação — a mostrar a última versão guardada</span>
+  </div>
+
+  <header class="topbar">
+    <div class="wordmark">Waya</div>
+    <button class="city-pill" id="cityPillBtn" type="button">
+      <span id="cityPillLabel">Luanda</span>
+      <span class="icon" id="cityPillChevron"></span>
+    </button>
+    <button class="profile-chip" id="profileChipBtn" type="button" aria-label="O meu perfil">?</button>
+  </header>
+
+  <main class="main">
+
+    <section class="screen active" id="screenMap">
+      <div class="mode-chip" id="modeChip">Modo: visualizar</div>
+      <div id="map"></div>
+      <div class="map-tint"></div>
+      <button class="fab" id="fabBtn" type="button" aria-label="Novo">
+        <span class="icon" id="fabIcon"></span>
+      </button>
+    </section>
+
+    <section class="screen" id="screenStops">
+      <div class="search-bar">
+        <span class="icon" id="searchIcon"></span>
+        <input type="text" id="searchInput" placeholder="Procurar paragem ou zona">
+      </div>
+      <div class="list" id="stopsList"></div>
+    </section>
+
+    <section class="screen" id="screenCollab">
+      <div class="section-header">
+        <h3>Colaboradores</h3>
+        <p>Pessoas que mantêm o mapa desta cidade actualizado.</p>
+      </div>
+      <div class="list" id="collabList"></div>
+    </section>
+
+    <section class="screen" id="screenProfile">
+      <div class="profile-scroll">
+
+        <div class="panel">
+          <h3>Estatísticas da cidade</h3>
+          <div class="stat-grid">
+            <div class="stat-box"><div class="num" id="statStops">0</div><div class="label">Paragens</div></div>
+            <div class="stat-box"><div class="num" id="statConnections">0</div><div class="label">Ligações</div></div>
+            <div class="stat-box"><div class="num" id="statCollaborators">0</div><div class="label">Colaboradores</div></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h3>O meu perfil de colaborador</h3>
+          <div class="field">
+            <label for="profileNameInput">Nome visível para outros colaboradores</label>
+            <input type="text" id="profileNameInput" placeholder="Ex: José, taxista do Cazenga">
+          </div>
+          <div class="field">
+            <label for="profileTypeSelect">Tipo de colaborador</label>
+            <select id="profileTypeSelect">
+              <option value="passageiro">Passageiro</option>
+              <option value="taxista">Taxista / motorista</option>
+              <option value="comerciante">Comerciante local</option>
+              <option value="estudante">Estudante</option>
+              <option value="outro">Outro</option>
+            </select>
+          </div>
+          <button class="btn primary" id="saveProfileBtn" type="button">Guardar perfil</button>
+          <p class="hint">Não pedimos email nem password. A tua identidade é apenas o nome que escreveres aqui, guardado neste dispositivo.</p>
+        </div>
+
+        <div class="panel">
+          <h3>Sincronização</h3>
+          <button class="btn secondary" id="syncNowBtn" type="button">Sincronizar agora</button>
+          <p class="hint" id="queueStatus">Tudo sincronizado.</p>
+        </div>
+
+        <div class="panel">
+          <h3>Dados</h3>
+          <button class="btn secondary" id="exportBtn" type="button">Exportar cidade em JSON</button>
+          <button class="btn secondary" id="clearCacheBtn" type="button">Limpar cópia local deste dispositivo</button>
+          <p class="hint">Isto não apaga nada da base de dados partilhada — apenas a cópia guardada neste telemóvel para uso offline.</p>
+        </div>
+
+        <div class="panel">
+          <h3>Cidade actual</h3>
+          <div class="field">
+            <label for="cityCostInput">Custo médio por troca (Kz)</label>
+            <input type="number" id="cityCostInput" min="0" step="10">
+          </div>
+          <button class="btn primary" id="saveCostBtn" type="button">Guardar custo</button>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <nav class="bottom-nav">
+    <button class="nav-btn active" data-screen="screenMap" type="button"><span class="icon" data-icon="pin"></span>Mapa</button>
+    <button class="nav-btn" data-screen="screenStops" type="button"><span class="icon" data-icon="search"></span>Paragens</button>
+    <button class="nav-btn" data-screen="screenCollab" type="button"><span class="icon" data-icon="users"></span>Colaboradores</button>
+    <button class="nav-btn" data-screen="screenProfile" type="button"><span class="icon" data-icon="gear"></span>Perfil</button>
+  </nav>
+
+</div>
+
+<div class="backdrop" id="backdrop"></div>
+
+<!-- Folha: acções do botão + -->
+<div class="sheet" id="fabSheet">
+  <div class="sheet-grip"></div>
+  <div class="sheet-title">O que queres fazer?</div>
+  <button class="action-item" id="actionAddStop" type="button">
+    <span class="icon-badge" data-icon="pin"></span>
+    <span><strong>Adicionar paragem</strong><span class="desc">Marca uma paragem no mapa</span></span>
+  </button>
+  <button class="action-item" id="actionAddConnection" type="button">
+    <span class="icon-badge" data-icon="link"></span>
+    <span><strong>Criar ligação</strong><span class="desc">Liga duas paragens com um tempo estimado</span></span>
+  </button>
+  <button class="action-item" id="actionFindRoute" type="button">
+    <span class="icon-badge" data-icon="route"></span>
+    <span><strong>Encontrar rota</strong><span class="desc">Melhor caminho entre duas paragens</span></span>
+  </button>
+</div>
+
+<!-- Folha: escolher/criar cidade -->
+<div class="sheet" id="citySheet">
+  <div class="sheet-grip"></div>
+  <div class="sheet-title">Escolher cidade</div>
+  <div class="city-list" id="cityList"></div>
+  <div class="field" style="margin-top:14px;">
+    <label for="newCityInput">Mapear uma nova cidade</label>
+    <input type="text" id="newCityInput" placeholder="Ex: Nairobi, Lagos, Maputo…">
+  </div>
+  <button class="btn accent" id="addCityBtn" type="button">Criar cidade</button>
+</div>
+
+<!-- Folha: formulário de paragem -->
+<div class="sheet" id="stopFormSheet">
+  <div class="sheet-grip"></div>
+  <div class="sheet-title" id="stopFormTitle">Nova paragem</div>
+  <img class="photo-preview" id="stopPhotoPreview" alt="">
+  <div class="field">
+    <label for="stopPhotoInput">Fotografia da paragem</label>
+    <input type="file" id="stopPhotoInput" accept="image/*" capture="environment">
+  </div>
+  <div class="field">
+    <label for="stopNameInput">Nome da paragem *</label>
+    <input type="text" id="stopNameInput" placeholder="Ex: Mercado do 1º de Maio">
+  </div>
+  <div class="field">
+    <label for="stopZoneInput">Bairro / zona</label>
+    <input type="text" id="stopZoneInput" placeholder="Ex: Cazenga">
+  </div>
+  <div class="field">
+    <label for="stopTypeInput">Tipo</label>
+    <select id="stopTypeInput">
+      <option value="principal">Principal (terminal)</option>
+      <option value="secundaria">Secundária (ponto de passagem)</option>
+    </select>
+  </div>
+  <div class="field">
+    <label for="stopNotesInput">Notas</label>
+    <textarea id="stopNotesInput" placeholder="Informações úteis para quem vai usar esta paragem"></textarea>
+  </div>
+  <div class="sheet-actions">
+    <button class="btn secondary" id="cancelStopBtn" type="button">Cancelar</button>
+    <button class="btn primary" id="saveStopBtn" type="button">Guardar</button>
+  </div>
+</div>
+
+<!-- Folha: formulário de ligação -->
+<div class="sheet" id="connectionFormSheet">
+  <div class="sheet-grip"></div>
+  <div class="sheet-title" id="connFormTitle">Nova ligação</div>
+  <div class="field">
+    <label for="connFromSelect">De</label>
+    <select id="connFromSelect"></select>
+  </div>
+  <div class="field">
+    <label for="connToSelect">Para</label>
+    <select id="connToSelect"></select>
+  </div>
+  <div class="field">
+    <label for="connTimeInput">Tempo estimado (minutos)</label>
+    <input type="number" id="connTimeInput" min="1" value="15">
+  </div>
+  <div class="sheet-actions">
+    <button class="btn secondary" id="cancelConnBtn" type="button">Cancelar</button>
+    <button class="btn primary" id="saveConnBtn" type="button">Guardar</button>
+  </div>
+</div>
+
+<!-- Folha: resultado da rota -->
+<div class="sheet" id="routeResultSheet">
+  <div class="sheet-grip"></div>
+  <div class="sheet-title">Rota encontrada</div>
+  <div id="routeResultContent"></div>
+  <div class="sheet-actions">
+    <button class="btn secondary" id="closeRouteBtn" type="button">Fechar</button>
+  </div>
+</div>
+
+<!-- Folha: detalhe da paragem -->
+<div class="sheet" id="stopDetailSheet">
+  <div class="sheet-grip"></div>
+  <div class="sheet-title" id="detailTitle">Paragem</div>
+  <img class="photo-preview" id="detailPhoto" alt="">
+  <div id="detailContent"></div>
+  <div id="detailConnections"></div>
+  <div id="detailVerifications"></div>
+  <div class="sheet-actions">
+    <button class="btn success" id="verifyStopBtn" type="button">Confirmo que existe</button>
+    <button class="btn secondary" id="editStopBtn" type="button">Editar</button>
+  </div>
+  <div class="sheet-actions">
+    <button class="btn secondary" id="closeDetailBtn" type="button">Fechar</button>
+    <button class="btn danger" id="deleteStopBtn" type="button">Apagar</button>
+  </div>
+</div>
+
+<!-- Folha: confirmação genérica -->
+<div class="sheet" id="confirmSheet">
+  <div class="sheet-grip"></div>
+  <div class="sheet-title">Confirmar acção</div>
+  <p class="confirm-message" style="font-size:14px;color:var(--text-soft);line-height:1.5;"></p>
+  <div class="sheet-actions">
+    <button class="btn secondary confirm-no" type="button">Cancelar</button>
+    <button class="btn danger confirm-yes" type="button">Confirmar</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<script src="js/config.js"></script>
+<script src="js/supabase-client.js"></script>
+<script src="js/data.js"></script>
+<script src="js/routing.js"></script>
+<script src="js/map.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/app.js"></script>
+
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
+</script>
+
+</body>
+</html>
