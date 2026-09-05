@@ -284,5 +284,16 @@ if ('serviceWorker' in navigator) {
 }
 </script>
 
+  <script>
+  // Fallback: se o JavaScript principal falhar, o splash desaparece sozinho
+  setTimeout(() => {
+    const veil = document.getElementById('loadingVeil');
+    if (veil && !veil.classList.contains('hidden')) {
+      console.warn('[WAYA] Splash escondido por timeout — verifica erros no console');
+      veil.classList.add('hidden');
+    }
+  }, 10000);
+</script>
+
 </body>
 </html>
